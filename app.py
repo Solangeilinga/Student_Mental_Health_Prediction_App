@@ -76,6 +76,45 @@ def load_model():
         st.error(f"Erreur de chargement du modèle: {e}")
         return None, None, None
 
+# ─────────────────────────────────────────────
+# CORRECTIF 1 : mappings FR → EN pour les encodeurs
+# Ces valeurs doivent correspondre exactement à ce que
+# le LabelEncoder a vu pendant l'entraînement.
+# ─────────────────────────────────────────────
+GENDER_MAP = {
+    "Homme": "Male",
+    "Femme": "Female"
+}
+
+DIET_MAP = {
+    "Sain":    "Healthy",
+    "Modéré":  "Moderate",
+    "Malsain": "Unhealthy"
+}
+
+FAMILY_MAP = {
+    "Non": "No",
+    "Oui": "Yes"
+}
+
+SUICIDAL_MAP = {
+    "Non":     "No",
+    "Parfois": "Yes",
+    "Souvent": "Yes"
+}
+
+# Degree : utilise les valeurs réelles du dataset
+DEGREE_OPTIONS = ["B.Ed", "B.Tech", "BA", "BCA", "BHM", "BPharm", "BSc",
+                  "Class 12", "LLB", "M.Ed", "M.Tech", "MA", "MBA", "MCA",
+                  "MPharm", "MSc", "PhD"]
+
+# Villes présentes dans le dataset
+CITY_OPTIONS = ["Agra", "Ahmedabad", "Bangalore", "Bhopal", "Chennai",
+                "Delhi", "Faridabad", "Ghaziabad", "Hyderabad", "Jaipur",
+                "Kalyan", "Kolkata", "Lucknow", "Ludhiana", "Mumbai",
+                "Nagpur", "Patna", "Pune", "Rajkot", "Srinagar",
+                "Surat", "Thane", "Vadodara", "Vasai-Virar", "Visakhapatnam"]
+
 # Header
 st.markdown('<div class="main-header"><h1>Student Well-being Analysis</h1></div>', unsafe_allow_html=True)
 
@@ -116,8 +155,13 @@ with st.expander("Section 1 : Profil personnel", expanded=not st.session_state.s
     c1, c2 = st.columns(2)
     age = c1.slider("Age", 18, 60, 22)
     gender = c2.selectbox("Genre", ["Homme", "Femme"])
-    city = st.selectbox("Ville", ["Delhi", "Mumbai", "Bangalore", "Autre"])
-    family_history = st.radio("Antecedents familiaux de troubles mentaux ?", ["Non", "Oui"], horizontal=True)
+    # CORRECTIF 2 : villes issues du dataset réel
+    city = st.selectbox("Ville", CITY_OPTIONS, index=CITY_OPTIONS.index("Delhi"))
+    family_history = st.radio(
+        "Antécédents familiaux de troubles mentaux ?",
+        ["Non", "Oui"],
+        horizontal=True
+    )
     
     if st.button("Valider section 1", key="btn1"):
         st.session_state.section1_complete = True
@@ -129,13 +173,14 @@ with st.expander("Section 1 : Profil personnel", expanded=not st.session_state.s
             st.rerun()
 
 # Section 2
-with st.expander("Section 2 : Situation academique", expanded=not st.session_state.section2_complete):
+with st.expander("Section 2 : Situation académique", expanded=not st.session_state.section2_complete):
     c3, c4 = st.columns(2)
-    academic_pressure = c3.select_slider("Pression academique", options=[1, 2, 3, 4, 5], value=3)
-    financial_stress = c4.select_slider("Stress financier", options=[1, 2, 3, 4, 5], value=2)
-    grade_20 = st.number_input("Moyenne generale (/20)", 0.0, 20.0, 14.0)
-    study_sat = c3.select_slider("Satisfaction des etudes", options=[1, 2, 3, 4, 5], value=3)
-    degree = st.selectbox("Diplome", ["Licence", "Master", "Doctorat", "Autre"])
+    academic_pressure = c3.select_slider("Pression académique", options=[1, 2, 3, 4, 5], value=3)
+    financial_stress  = c4.select_slider("Stress financier",    options=[1, 2, 3, 4, 5], value=2)
+    grade_20 = st.number_input("Moyenne générale (/20)", 0.0, 20.0, 14.0)
+    study_sat = c3.select_slider("Satisfaction des études", options=[1, 2, 3, 4, 5], value=3)
+    # CORRECTIF 3 : diplômes issus du dataset réel
+    degree = st.selectbox("Diplôme", DEGREE_OPTIONS, index=DEGREE_OPTIONS.index("BSc"))
     
     if st.button("Valider section 2", key="btn2"):
         st.session_state.section2_complete = True
@@ -149,10 +194,24 @@ with st.expander("Section 2 : Situation academique", expanded=not st.session_sta
 # Section 3
 with st.expander("Section 3 : Style de vie", expanded=not st.session_state.section3_complete):
     c5, c6 = st.columns(2)
-    sleep = c5.slider("Duree de sommeil (heures)", 3.0, 12.0, 7.0)
-    work_hours = c6.number_input("Heures d'etude/travail par jour", 0, 15, 6)
-    diet = st.selectbox("Habitudes alimentaires", ["Sain", "Modere", "Malsain"], index=1)
-    suicidal = st.selectbox("Pensees negatives recurrentes ?", ["Non", "Parfois", "Souvent"])
+
+    # CORRECTIF 4 : Sleep Duration — on utilise les buckets du dataset
+    # Le modèle a été entraîné sur 4 / 5.5 / 7.5 / 9
+    sleep_label = c5.selectbox(
+        "Durée de sommeil",
+        ["Moins de 5h", "5-6h", "7-8h", "Plus de 8h"],
+        index=2
+    )
+    SLEEP_MAP = {
+        "Moins de 5h": 4.0,
+        "5-6h":        5.5,
+        "7-8h":        7.5,
+        "Plus de 8h":  9.0
+    }
+
+    work_hours = c6.number_input("Heures d'étude/travail par jour", 0, 15, 6)
+    diet = st.selectbox("Habitudes alimentaires", ["Sain", "Modéré", "Malsain"], index=1)
+    suicidal = st.selectbox("Pensées négatives récurrentes ?", ["Non", "Parfois", "Souvent"])
     
     if st.button("Valider section 3", key="btn3"):
         st.session_state.section3_complete = True
@@ -166,99 +225,106 @@ with st.expander("Section 3 : Style de vie", expanded=not st.session_state.secti
 st.markdown("---")
 
 # Bouton d'analyse
-all_sections_complete = st.session_state.section1_complete and st.session_state.section2_complete and st.session_state.section3_complete
+all_sections_complete = (
+    st.session_state.section1_complete and
+    st.session_state.section2_complete and
+    st.session_state.section3_complete
+)
 
 if all_sections_complete:
     if st.button("Lancer l'analyse", use_container_width=True):
-        # Préparation des données selon les colonnes du modèle
         model, encoders, feature_columns = load_model()
-        
-        # Créer le dictionnaire des features
+
+        if model is None:
+            st.stop()
+
+        # ─────────────────────────────────────────────
+        # CORRECTIF 5 : toutes les valeurs sont en anglais
+        # (comme pendant l'entraînement) AVANT l'encodage
+        # ─────────────────────────────────────────────
         input_dict = {
-            'Gender': 'Male' if gender == "Homme" else 'Female',
-            'Age': age,
-            'City': city,
-            'Profession': 'Student',
-            'Academic Pressure': academic_pressure,
-            'Work Pressure': 0,
-            'CGPA': grade_20 / 2,
-            'Study Satisfaction': study_sat,
-            'Job Satisfaction': 0,
-            'Sleep Duration': sleep,
-            'Dietary Habits': 'Healthy' if diet == "Sain" else 'Moderate' if diet == "Modere" else 'Unhealthy',
-            'Degree': degree,
-            'suicidal_thoughts': 'Yes' if suicidal in ["Parfois", "Souvent"] else 'No',
-            'Work/Study Hours': work_hours,
-            'Financial Stress': financial_stress,
-            'Family History of Mental Illness': family_history
+            'Gender':                          GENDER_MAP[gender],
+            'Age':                             age,
+            'City':                            city,          # déjà en anglais
+            'Profession':                      'Student',
+            'Academic Pressure':               academic_pressure,
+            'Work Pressure':                   0,
+            'CGPA':                            round(grade_20 / 2, 2),
+            'Study Satisfaction':              study_sat,
+            'Job Satisfaction':                0,
+            'Sleep Duration':                  SLEEP_MAP[sleep_label],   # buckets numériques
+            'Dietary Habits':                  DIET_MAP[diet],
+            'Degree':                          degree,        # déjà en anglais
+            'suicidal_thoughts':               SUICIDAL_MAP[suicidal],
+            'Work/Study Hours':                work_hours,
+            'Financial Stress':                financial_stress,
+            'Family History of Mental Illness': FAMILY_MAP[family_history],
         }
-        
-        # Encoder les variables catégorielles
-        for col in encoders.keys():
+
+        # Encodage des variables catégorielles
+        for col, le in encoders.items():
             if col in input_dict:
-                try:
-                    input_dict[col] = encoders[col].transform([input_dict[col]])[0]
-                except:
-                    input_dict[col] = 0  # valeur par défaut
-        
-        # Créer le DataFrame dans le bon ordre des colonnes
+                val = input_dict[col]
+                known_classes = list(le.classes_)
+                if val not in known_classes:
+                    # Valeur inconnue : on prend la classe la plus fréquente (index 0)
+                    st.warning(
+                        f"Valeur « {val} » inconnue pour « {col} ». "
+                        f"Valeur par défaut utilisée : « {known_classes[0]} »."
+                    )
+                    val = known_classes[0]
+                input_dict[col] = le.transform([val])[0]
+
+        # Création du DataFrame dans l'ordre exact des colonnes
         input_df = pd.DataFrame([input_dict])[feature_columns]
-        
+
         with st.spinner("Analyse en cours..."):
             try:
-                # Prédiction
-                prediction = model.predict(input_df)[0]
-                proba = model.predict_proba(input_df)[0]
-                risk_score = proba[1]
+                prediction  = model.predict(input_df)[0]
+                proba       = model.predict_proba(input_df)[0]
+                risk_score  = proba[1]
                 well_being_score = (1 - risk_score) * 100
-                
-                # Affichage des résultats
+
                 st.markdown("---")
-                st.markdown("### Resultats de l'analyse")
-                
+                st.markdown("### Résultats de l'analyse")
+
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                    
-                    # Barre de progression
                     st.markdown(f"""
                     <div style="margin: 20px 0;">
                         <div style="background-color: #E0E0E0; border-radius: 3px; height: 25px; overflow: hidden;">
-                            <div style="background-color: #4A90E2; width: {well_being_score}%; height: 100%; border-radius: 3px;"></div>
+                            <div style="background-color: #4A90E2; width: {well_being_score:.1f}%; height: 100%; border-radius: 3px;"></div>
                         </div>
                         <div style="text-align: center; margin-top: 10px; font-weight: bold;">
-                            Score de bien-être: {well_being_score:.1f}%
+                            Score de bien-être : {well_being_score:.1f}%
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
                     st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Interprétation
+
                 st.markdown("---")
-                st.markdown("### Interpretation")
-                
+                st.markdown("### Interprétation")
+
                 if well_being_score < 40:
-                    st.error("⚠️ Niveau de stress eleve. Une attention particuliere est recommandee.")
+                    st.error("⚠️ Niveau de stress élevé. Une attention particulière est recommandée.")
                 elif well_being_score < 70:
-                    st.warning("📊 Niveau de stress modere. Quelques ajustements pourraient etre benefiques.")
+                    st.warning("📊 Niveau de stress modéré. Quelques ajustements pourraient être bénéfiques.")
                 else:
-                    st.success("✅ Bon niveau de bien-etre. Continuez ainsi !")
-                
-                # Détails de la prédiction
+                    st.success("✅ Bon niveau de bien-être. Continuez ainsi !")
+
                 with st.expander("Détails de l'analyse"):
-                    st.write(f"**Risque de dépression:** {risk_score:.2%}")
-                    st.write(f"**Confiance du modèle:** {max(proba):.2%}")
-                    st.write(f"**Prédiction:** {'À risque' if prediction == 1 else 'Non à risque'}")
-                
-                # Bouton nouvelle analyse
+                    st.write(f"**Risque de dépression :** {risk_score:.2%}")
+                    st.write(f"**Confiance du modèle :** {max(proba):.2%}")
+                    st.write(f"**Prédiction :** {'À risque' if prediction == 1 else 'Non à risque'}")
+
                 st.markdown("---")
                 if st.button("Nouvelle analyse", use_container_width=True):
                     for key in ['section1_complete', 'section2_complete', 'section3_complete']:
                         st.session_state[key] = False
                     st.rerun()
-                    
+
             except Exception as e:
-                st.error(f"Erreur lors de l'analyse: {str(e)}")
+                st.error(f"Erreur lors de l'analyse : {str(e)}")
 else:
     st.info("Veuillez valider les 3 sections pour lancer l'analyse.")
