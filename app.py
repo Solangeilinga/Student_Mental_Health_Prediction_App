@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 
 # Configuration de la page
@@ -9,13 +10,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS personnalisé - style minimal
+# CSS personnalisé
 st.markdown("""
 <style>
     .stApp {
         background-color: #F5F5F5;
     }
-    
     .main-header {
         text-align: center;
         padding: 1rem;
@@ -24,7 +24,6 @@ st.markdown("""
         color: white;
         margin-bottom: 2rem;
     }
-    
     .metric-card {
         background-color: white;
         padding: 1.5rem;
@@ -34,7 +33,6 @@ st.markdown("""
         margin: 1rem 0;
         border: 1px solid #E0E0E0;
     }
-    
     .stButton > button {
         background-color: #4A90E2;
         color: white;
@@ -43,15 +41,12 @@ st.markdown("""
         font-weight: bold;
         border-radius: 3px;
     }
-    
     .stButton > button:hover {
         background-color: #3A7BC8;
     }
-    
     .stButton > button:disabled {
         background-color: #BDBDBD;
     }
-    
     .section-complete {
         background-color: #E8F5E9;
         border-left: 4px solid #4CAF50;
@@ -59,7 +54,6 @@ st.markdown("""
         margin: 0.5rem 0;
         border-radius: 3px;
     }
-    
     .section-incomplete {
         background-color: #FFF3E0;
         border-left: 4px solid #FF9800;
@@ -72,7 +66,15 @@ st.markdown("""
 
 @st.cache_resource
 def load_model():
-    return joblib.load("pipeline.pkl")
+    """Charge le modèle et les encodeurs"""
+    try:
+        model = joblib.load("pipeline.pkl")
+        encoders = joblib.load("encoders.pkl")
+        feature_columns = joblib.load("feature_columns.pkl")
+        return model, encoders, feature_columns
+    except Exception as e:
+        st.error(f"Erreur de chargement du modèle: {e}")
+        return None, None, None
 
 # Header
 st.markdown('<div class="main-header"><h1>Student Well-being Analysis</h1></div>', unsafe_allow_html=True)
@@ -132,7 +134,7 @@ with st.expander("Section 2 : Situation academique", expanded=not st.session_sta
     academic_pressure = c3.select_slider("Pression academique", options=[1, 2, 3, 4, 5], value=3)
     financial_stress = c4.select_slider("Stress financier", options=[1, 2, 3, 4, 5], value=2)
     grade_20 = st.number_input("Moyenne generale (/20)", 0.0, 20.0, 14.0)
-    study_sat = st.select_slider("Satisfaction des etudes", options=[1, 2, 3, 4, 5], value=3)
+    study_sat = c3.select_slider("Satisfaction des etudes", options=[1, 2, 3, 4, 5], value=3)
     degree = st.selectbox("Diplome", ["Licence", "Master", "Doctorat", "Autre"])
     
     if st.button("Valider section 2", key="btn2"):
@@ -168,12 +170,15 @@ all_sections_complete = st.session_state.section1_complete and st.session_state.
 
 if all_sections_complete:
     if st.button("Lancer l'analyse", use_container_width=True):
-        # Préparation des données
-        data = pd.DataFrame([{
+        # Préparation des données selon les colonnes du modèle
+        model, encoders, feature_columns = load_model()
+        
+        # Créer le dictionnaire des features
+        input_dict = {
             'Gender': 'Male' if gender == "Homme" else 'Female',
             'Age': age,
             'City': city,
-            'Profession': "Student",
+            'Profession': 'Student',
             'Academic Pressure': academic_pressure,
             'Work Pressure': 0,
             'CGPA': grade_20 / 2,
@@ -186,12 +191,24 @@ if all_sections_complete:
             'Work/Study Hours': work_hours,
             'Financial Stress': financial_stress,
             'Family History of Mental Illness': family_history
-        }])
+        }
+        
+        # Encoder les variables catégorielles
+        for col in encoders.keys():
+            if col in input_dict:
+                try:
+                    input_dict[col] = encoders[col].transform([input_dict[col]])[0]
+                except:
+                    input_dict[col] = 0  # valeur par défaut
+        
+        # Créer le DataFrame dans le bon ordre des colonnes
+        input_df = pd.DataFrame([input_dict])[feature_columns]
         
         with st.spinner("Analyse en cours..."):
             try:
-                model = load_model()
-                proba = model.predict_proba(data)[0]
+                # Prédiction
+                prediction = model.predict(input_df)[0]
+                proba = model.predict_proba(input_df)[0]
                 risk_score = proba[1]
                 well_being_score = (1 - risk_score) * 100
                 
@@ -210,31 +227,35 @@ if all_sections_complete:
                             <div style="background-color: #4A90E2; width: {well_being_score}%; height: 100%; border-radius: 3px;"></div>
                         </div>
                         <div style="text-align: center; margin-top: 10px; font-weight: bold;">
-                            Score: {well_being_score:.1f}%
+                            Score de bien-être: {well_being_score:.1f}%
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Interprétation simple
+                # Interprétation
                 st.markdown("---")
                 st.markdown("### Interpretation")
                 
                 if well_being_score < 40:
-                    st.error("Niveau de stress eleve. Une attention particuliere est recommandee.")
+                    st.error("⚠️ Niveau de stress eleve. Une attention particuliere est recommandee.")
                 elif well_being_score < 70:
-                    st.warning("Niveau de stress modere. Quelques ajustements pourraient etre benefiques.")
+                    st.warning("📊 Niveau de stress modere. Quelques ajustements pourraient etre benefiques.")
                 else:
-                    st.success("Bon niveau de bien-etre. Continuez ainsi !")
+                    st.success("✅ Bon niveau de bien-etre. Continuez ainsi !")
+                
+                # Détails de la prédiction
+                with st.expander("Détails de l'analyse"):
+                    st.write(f"**Risque de dépression:** {risk_score:.2%}")
+                    st.write(f"**Confiance du modèle:** {max(proba):.2%}")
+                    st.write(f"**Prédiction:** {'À risque' if prediction == 1 else 'Non à risque'}")
                 
                 # Bouton nouvelle analyse
                 st.markdown("---")
                 if st.button("Nouvelle analyse", use_container_width=True):
-                    # Réinitialisation
-                    st.session_state.section1_complete = False
-                    st.session_state.section2_complete = False
-                    st.session_state.section3_complete = False
+                    for key in ['section1_complete', 'section2_complete', 'section3_complete']:
+                        st.session_state[key] = False
                     st.rerun()
                     
             except Exception as e:
