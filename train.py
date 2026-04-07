@@ -12,14 +12,16 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
-import pickle
-import joblib  # AJOUTEZ JOBLIB
+import joblib
 import warnings
 warnings.filterwarnings("ignore")
+
+# Vérification des versions
+print(f"NumPy version: {np.__version__}")
+print(f"Scikit-learn version: {__import__('sklearn').__version__}")
 
 # ==============================
 # 1️⃣ Charger le dataset
@@ -57,8 +59,8 @@ cat_cols = ['Gender', 'City', 'Profession', 'Dietary Habits', 'Degree',
 encoders = {}
 for col in cat_cols:
     le = LabelEncoder()
-    df[col] = le.fit_transform(df[col])
-    encoders[col] = le  # Stocker l'encodeur
+    df[col] = le.fit_transform(df[col].astype(str))
+    encoders[col] = le
 
 # ==============================
 # 4️⃣ Features / Target
@@ -82,33 +84,11 @@ print("Validation:", X_val.shape)
 print("Test:", X_test.shape)
 
 # ==============================
-# 6️⃣ Pipeline Logistic Regression
-# ==============================
-pipeline_log = Pipeline([
-    ('imputer', SimpleImputer(strategy='mean')),
-    ('scaler', StandardScaler()),
-    ('model', LogisticRegression(max_iter=1000, random_state=42))
-])
-
-pipeline_log.fit(X_train, y_train)
-
-# Validation
-y_val_pred = pipeline_log.predict(X_val)
-print("\n=== Logistic Regression ===")
-print("Validation Accuracy:", accuracy_score(y_val, y_val_pred))
-print(classification_report(y_val, y_val_pred))
-
-# Test
-y_test_pred = pipeline_log.predict(X_test)
-print("Test Accuracy:", accuracy_score(y_test, y_test_pred))
-print(classification_report(y_test, y_test_pred))
-
-# ==============================
-# 7️⃣ Pipeline Random Forest
+# 6️⃣ Pipeline Random Forest avec StandardScaler
 # ==============================
 pipeline_rf = Pipeline([
     ('imputer', SimpleImputer(strategy='mean')),
-    ('scaler', StandardScaler()),  # AJOUTER scaler pour Random Forest aussi
+    ('scaler', StandardScaler()),
     ('model', RandomForestClassifier(n_estimators=200, random_state=42))
 ])
 
@@ -120,32 +100,12 @@ print("\n=== Random Forest ===")
 print("Validation Accuracy:", accuracy_score(y_val, y_val_pred_rf))
 print(classification_report(y_val, y_val_pred_rf))
 
-# Test
-y_test_pred_rf = pipeline_rf.predict(X_test)
-print("Test Accuracy:", accuracy_score(y_test, y_test_pred_rf))
-print(classification_report(y_test, y_test_pred_rf))
-
 # ==============================
-# 8️⃣ Feature Importance
-# ==============================
-rf_model = pipeline_rf.named_steps['model']
-
-feat_importances = pd.Series(rf_model.feature_importances_, index=X.columns)
-feat_importances = feat_importances.sort_values(ascending=False)
-
-plt.figure(figsize=(10,6))
-sns.barplot(x=feat_importances.values, y=feat_importances.index)
-plt.title("Feature Importance")
-plt.tight_layout()
-plt.savefig("feature_importance.png")
-plt.show()
-
-# ==============================
-# 9️⃣ GridSearchCV (Random Forest)
+# 7️⃣ GridSearchCV pour optimisation
 # ==============================
 param_grid = {
     'model__n_estimators': [100, 200],
-    'model__max_depth': [5, 10, None],
+    'model__max_depth': [10, 20, None],
     'model__min_samples_split': [2, 5],
     'model__min_samples_leaf': [1, 2]
 }
@@ -164,32 +124,22 @@ grid.fit(X_train, y_train)
 print("\nBest Parameters:", grid.best_params_)
 
 # ==============================
-# 🔟 Meilleur modèle
+# 8️⃣ Meilleur modèle
 # ==============================
 best_model = grid.best_estimator_
 
-# Validation
-y_val_best = best_model.predict(X_val)
-print("\n=== Optimized Random Forest ===")
-print("Validation Accuracy:", accuracy_score(y_val, y_val_best))
-print(classification_report(y_val, y_val_best))
-
-# Test
+# Test du meilleur modèle
 y_test_best = best_model.predict(X_test)
+print("\n=== Optimized Random Forest ===")
 print("Test Accuracy:", accuracy_score(y_test, y_test_best))
 print(classification_report(y_test, y_test_best))
 
 # ==============================
-# 💾 1️⃣1️⃣ Sauvegarde avec JOBLIB (RECOMMANDÉ)
+# 💾 Sauvegarde avec JOBLIB
 # ==============================
-# Sauvegarder le meilleur modèle (Random Forest optimisé)
 joblib.dump(best_model, "pipeline.pkl")
-
-# Sauvegarder aussi les encodeurs pour l'inférence
 joblib.dump(encoders, "encoders.pkl")
-
-# Sauvegarder la liste des colonnes
 joblib.dump(list(X.columns), "feature_columns.pkl")
 
-print("\n✅ Modèle sauvegardé avec joblib!")
+print("\n✅ Modèle sauvegardé avec succès!")
 print("📁 Fichiers créés: pipeline.pkl, encoders.pkl, feature_columns.pkl")
